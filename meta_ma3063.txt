@@ -1,0 +1,51 @@
+# Backup Firmware Ruijie MA3063 (RG-MA3063)
+Tanggal dump : 2026-08-13
+Metode      : U-Boot console (serial /dev/ttyUSB0 115200) -> nand read + tftpput
+Sumber      : NAND MX35UF1GE4AC 128MiB, IPQ5018, U-Boot 2016.01
+Firmware    : MA_1.1(1)  (productinfo.bin: rj_model="RG-MA3063", ProductInfo=0B0EFACE)
+
+## Partisi & MD5
+ukuran sesuai `nand read` di U-Boot (ukuran diambil dari table smeminfo / partisi asli).
+Nama          Offet        Ukuran       MD5
+-------------- ------------ ------------ ------------------------------------
+sbl1          0x00000000   0x80000       c22f83ad235429e7fca0f27aec243c72
+mibib         0x00080000   0x80000       decf1427934195c9c9c13c2943a9ee9a
+bootconfig    0x00100000   0x40000       5308dc09f59c0c5cae9c8cc6e53a6a4e
+bootconfig1   0x00140000   0x40000       5308dc09f59c0c5cae9c8cc6e53a6a4e
+qsee          0x00180000   0x100000       993687dc0ed4b9c8152d0fe183cf746b
+qsee_1        0x00280000   0x100000       2fdd6851b32ae931637d4845c037b550
+devcfg        0x00380000   0x40000       a64c667516da1540bc199e342c97ac18
+devcfg_1      0x003c0000   0x40000       09a1d434dbd7197e7c3af8a7c28ca38b
+cdt           0x00400000   0x40000       ab92d0b8b755ee5b2b730e5684323229
+cdt_1         0x00440000   0x40000       09a1d434dbd7197e7c3af8a7c28ca38b
+appsblenv     0x00480000   0x80000       ee463b57fdb9f2a84195beb911f76291
+appsbl        0x00500000   0x140000       6bae088e3e61a0b27ed4b43a787a5f4b
+appsbl_1      0x00640000   0x140000       6bae088e3e61a0b27ed4b43a787a5f4b
+art           0x00780000   0x100000       85ef114f428692e983b078297fab6ebd
+training      0x00880000   0x80000       f2e771b4591ef55ffa334b44ec1e8fdb
+rootfs        0x03b00000   0x3200000      0b95ce3cd4d02ea4938973650912bcb5
+rootfs_1      0x09000000   0x3200000      db53c43d166f830132a65cbee6650a4a
+ttymtd        0x06d00000   0x120000       3bdcc640d470910a4f1b7e9d51abdd3e
+productinfo   0x06e20000   0x80000       703d95706e611b42c73e43649f6d6d86
+data          0x06ea0000   0x1040000      2777104f228cff2c9299df5a2d0c4b39
+
+Catatan:
+- appsbl == appsbl_1, bootconfig == bootconfig1, cdt_1 == devcfg_1 (berisi data sama).
+- art.bin berisi hash cal "18a14510..." sesuai log boot "Art crc check ok".
+
+## Struktur isi rootfs.bin (UBI, 5 volume)
+- kernel     : uImage (u-boot), d00dfeed
+- wifi_fw    : SquashFS
+- bt_fw      : SquashFS
+- ubi_rootfs : SquashFS (rootfs read-only, berisi /etc/shadow)
+- rootfs_data: UBIFS (overlay writable)
+
+## Login console / SSH
+Username : root (atau admin)
+Password : wifi@cmcc
+Hash     : $1$G.w1Kd/c$OxHqp4GMbBQ9UY2KRulmg/  (MD5-crypt, verifikasi cocok dgn openssl)
+
+## Jaringan U-Boot TFTP (dipakai saat dump)
+ipaddr=192.168.1.1  serverip=192.168.1.8 (diset manual via setenv, TIDAK di saveenv)
+Default env pabrik (jika reboot): ipaddr=192.168.10.10 serverip=192.168.10.19
+TFTP server: in.tftpd -l -c -s /tmp/opencode/tftpboot (dir chmod 0777)
