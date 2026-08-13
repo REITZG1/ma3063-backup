@@ -1,0 +1,39 @@
+Objective
+- Menginstall OpenWrt modern (aarch64) di Ruijie MA3063 (IPQ5018, 256MB, NAND MX35UF1GE4AC); user menolak OpenWrt stok 15.05.
+- Setelah APPSBL komunitas terpasang, kernel aarch64 masih gagal boot → jalur baru: mengganti QSEE MA3063 (SAOAANAYA) dengan QSEE IPQ5018 yang mendukung EL1SWITCH (MAACANAZA dari MR3000D-CI/04) agar U-Boot komunitas bisa jump ke AArch64.
+Important Details
+- APPSBL sudah berhasil diganti (dengan persetujuan user) ke U-Boot komunitas 1980490718/u-boot-2016, build khusus MA3063 (ipq5018_ruijie_ma3063_defconfig): boot OK — U-Boot 2016.01-g24ee21b (Jul 31 2026 - 13:51:37 +0800), Model: Ruijie MA3063 (QCA, IPQ5018-MP02.1), Config Name(s): config@mp02.1, config@1, DRAM 256 MiB, NAND MX35UF1GE4AC (ID 0xc2 0x92, 128MiB, 2048+64, ECC 4-bit), GPIO33 reset/GPIO34 wps/GPIO38 red/GPIO32 blue/GPIO19 green, machid 0x8040000, prompt IPQ5018#.
+- Akar masalah kernel aarch64 terkonfirmasi: U-Boot komunitas memanggil scm_call_64(SCM_ARCH64_SWITCH_ID, SCM_EL1SWITCH_CMD_ID) (arch/arm/cpu/armv7/qca/common/scm.c, printf "Jumping to AARCH64 kernel via monitor"); log berhenti di pesan itu lalu reset (bukan "Can't boot kernel"+hang) → QSEE MA3063 (64-bit, IMAGE_VARIANT_STRING=SAOAANAYA) menerima SMC tapi TZ panic saat EL1 switch. Bukan masalah DTB (test.itb dtb mr3000d-ci → reset identik).
+- QSEE MR3000D-04 (hardware sama dgn MR3000D-CI): S - QC_IMAGE_VERSION_STRING=BOOT.BF.3.3.1.1-00066, S - IMAGE_VARIANT_STRING=MAACANAZA → mendukung EL1SWITCH (komunitas boot OpenWrt aarch64 di MR3000D-CI lewat U-Boot 32-bit).
+- Layout bootloader MA3063 ≡ MR3000D-CI/04 (0x0–0x900000): SBL1 0x0, MIBIB 0x80000, BOOTCONFIG 0x100000, BOOTCONFIG1 0x140000, QSEE 0x180000, QSEE_1 0x280000, DEVCFG 0x380000, DEVCFG1 0x3c0000, CDT 0x400000, CDT1 0x440000, APPSBLENV 0x480000, APPSBL 0x500000 (1,25MB), APPSBL1 0x640000 (masih stock sebagai fallback), ART 0x780000, TRAINING 0x880000; MR3000D-CI rootfs@0x900000 0x3a00000 vs MA3063 rootfs@0x3b00000 50MB + rootfs1@0x900000.
+- Flash QSEE = risiko menengah: TZ gagal init → brick sebelum console; recoverable via CH341A + SNANDer (backup 20/20 terverifikasi di /home/samsul/backup-ma3063). Perlu konfirmasi user lagi (berbeda dari sekadar APPSBL).
+- Kondisi saat ini aman: device boot normal ke OpenWrt stok 15.05 (kernel 32-bit stok jalan sempurna di bawah U-Boot komunitas via autoboot UBI volume kernel).
+- Env serial: login root/wifi@cmcc → reboot → spam \r; U-Boot: setenv ipaddr 192.168.1.1; setenv serverip 192.168.1.8; setenv ethaddr 9c:2b:a6:ea:21:e9 (ART MAC tidak terbaca di U-Boot komunitas → default 0:11:22:33:44:55); tftpboot 0x44000000; bootm 0x44000000; crc32 verifikasi. Host: enp3s0 192.168.1.8/24, in.tftpd -s /tmp/opencode/tftpboot (PID 9370), /dev/ttyUSB0, internet OK.
+- CRC32: appsbl_new.bin=010af46e, stock appsbl.bin=77411145, initramfs itb=7fbdd0b9, test.itb=52856380.
+- Rujukan boot aarch64 MA3063 yang sudah jalan di komunitas lain (bukan OpenWrt murni): NWRT QSDK12 kernel 5.4 (arm64) — prosedur flash 0:APPSBL (u-boot.mbn), flash MIBIB besar, flash rootfs; firmware lewat grup berbayar (恩山 thread-8316318, 10元); peringatan: jangan flash untuk chip flash 复旦微 (MX35UF1GE4AC aman). Firmware MA3063 v1.1 publik di https://cloud.189.cn/web/share?code=neAJfuvAbYFf (访问码 1ke4) — kemungkinan QSEE lama; versi 2.1 tidak ditemukan sumbernya.
+- U-Boot stock MA3063 versi lebih baru (May 19 2023) punya perintah flash rootfs (godsun.pro) — tidak relevan lagi karena APPSBL sudah komunitas.
+Work State
+Completed
+- Flash APPSBL sukses & terverifikasi: tftpboot appsbl_new.bin → crc32 RAM 010af46e ✓ → live pre-flash 77411145 ✓ → nand erase 0x500000 0x140000 → nand write 0x44000000 0x500000 0x140000 → read-back 010af46e ✓ → reset → banner U-Boot komunitas muncul (log /tmp/opencode/ubootflash.log).
+- Uji phase 2 (ramboot_comm.py, log ramboot_comm.log): tftpboot initramfs itb (crc32 7fbdd0b9) → bootm → FIT config@mp02.1 (kernel gzip AArch64, load/entry 0x41000000; fdt 0x4a3f7000) → Jumping to AARCH64 kernel via monitor → reset tanpa output kernel; lalu autoboot stock kernel 4.4.60 ARM boot penuh ke OpenWrt stok 15.05 ✓.
+- Uji test.itb (dtb mr3000d-ci) di U-Boot komunitas → reset identik → bukan masalah DTB (log ramboot_test_comm.log).
+- Inspeksi QSEE MA3063: strings tidak menunjukkan service EL1SWITCH; qsee.bin = ELF64 aarch64 entry 0x4ac00000, devcfg.bin = ELF64 aarch64 entry 0x4ad23000, sbl1.bin = format boot image (bukan ELF), appsbl.bin = ELF32 entry 0x4a920000.
+- Web research: MR3000D-04 (forum.openwrt.org/t/add-device-cmcc-mr3000d-04/250935) konfirmasi QSEE MAACANAZA; ImmortalWrt MR3000D-CI image tersedia di downloads.immortalwrt.org (mis. cmcc_mr3000d-ci-initramfs-uImage.itb, sha256 26a924a41c97...).
+Active
+- Mencari sumber QSEE MAACANAZA: butuh update.bin OEM MR3000D-CI/MR3000D-04 (CMIOT-SR1.0.2) atau full dump (sbl1/qsee/devcfg) — belum ditemukan link unduhan langsung; cloud.189 v1.1 MA3063 kemungkinan QSEE lama.
+- Opsi alternatif yang dipertimbangkan: (A) QSEE MR3000D-CI/04 + mungkin devcfg/SBL1; (B) upgrade QSEE MA3063 v2.1 (sulit dicari); (C) firmware NWRT berbayar; (D) tetap stok (ditolak user).
+Blocked
+- Kernel OpenWrt aarch64 tidak bisa boot di MA3063 sampai QSEE mendukung EL1SWITCH (root cause tajam, terverifikasi di kode & log).
+- Belum ada file firmware MR3000D-CI/04 yang memuat QSEE MAACANAZA di lokal → perlu diunduh/diekstrak sebelum eksekusi.
+Next Move
+1. Dapatkan QSEE/devcfg (dan sbl1 opsional) MAACANAZA: cari update.bin CMIOT-SR1.0.2 MR3000D-CI/04 atau full dump di forum/github (bila perlu minta di thread OpenWrt/恩山), lalu ekstrak partisi.
+2. Konfirmasi ke user sebelum menyentuh QSEE (risiko TZ, recoverable via CH341A + backup lengkap): presentasikan opsi A (QSEE swap teruji MR3000D-CI) vs C (NWRT berbayar) vs berhenti.
+3. Jika disetujui: backup ulang QSEE/QSEE_1/DEVCFG → flash QSEE baru (0x180000) + QSEE1 (0x280000) dan devcfg bila perlu → reset → U-Boot komunitas → ram-boot openwrt-...-initramfs-uImage.itb (gzip, crc32 7fbdd0b9) → kalau kernel aarch64 keluar output → lanjut flash factory.ubi ke rootfs/rootfs1.
+Relevant Files
+- /tmp/opencode/ubootflash.py, /tmp/opencode/ramboot_comm.py, /tmp/opencode/ramboot_test.py — skrip serial (probe login/U-Boot, tftpboot, crc, bootm).
+- /tmp/opencode/ubootflash.log, ramboot_comm.log, ramboot_test_comm.log — log flash & percobaan boot.
+- /tmp/opencode/tftpboot/ — appsbl_new.bin, openwrt-qualcommax-ipq50xx-ruijie_rg-ma3063-initramfs-uImage.itb, test.itb, -squashfs-factory.ubi, -squashfs-sysupgrade.bin.
+- /home/samsul/backup-ma3063/ — 20 partisi NAND + meta_ma3063.txt (backup terverifikasi, termasuk qsee.bin/qsee_1.bin/devcfg.bin).
+- /home/samsul/openwrt/target/linux/qualcommax/image/ipq50xx.mk — def ruijie_rg-ma3063 (Device/FitImage gzip) untuk rebuild image bila perlu.
+- /tmp/opencode/uboot-2016/arch/arm/cpu/armv7/qca/common/scm.c — kode jump_kernel64/EL1SWITCH (root cause).
+- Referensi: https://forum.openwrt.org/t/add-device-cmcc-mr3000d-04/250935 (QSEE MAACANAZA); https://downloads.immortalwrt.org/snapshots/targets/qualcommax/ipq50xx/ (image MR3000D-CI); 恩山 thread-8473838 (firmware v1.1 cloud.189.cn); godsun.pro/blog/rui-jie-rg-ma3063 (NWRT/TTL).
