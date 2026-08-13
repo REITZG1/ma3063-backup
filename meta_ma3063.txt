@@ -40,10 +40,24 @@ Catatan:
 - ubi_rootfs : SquashFS (rootfs read-only, berisi /etc/shadow)
 - rootfs_data: UBIFS (overlay writable)
 
-## Login console / SSH
-Username : root (atau admin)
+## Login console / SSH (TERVERIFIKASI langsung via serial, 2026-08-13)
+Username : admin  (root juga tersedia, hash sama)
 Password : wifi@cmcc
 Hash     : $1$G.w1Kd/c$OxHqp4GMbBQ9UY2KRulmg/  (MD5-crypt, verifikasi cocok dgn openssl)
+Hasil    : login sukses -> shell root@OpenWrt:/#
+
+## OpenWrt setelah boot (hasil observasi langsung)
+- OpenWrt Chaos Calmer 15.05.1, target ipq/ipq50xx, rev b22d587ce+r49254
+- dropbear (SSH) : port 22  |  telnetd : port 23
+- Web : 80/443, debug port 8088, dnsmasq : 53
+- Struktur: /rom (ubi_rootfs squashfs), /overlay (rootfs_data ubifs), /data (ubi1:data)
+
+## Enable SSH via web (cara 1 - semua versi)
+Buka http://192.168.10.1/__factory_verify_mode__ -> otomatis buka port SSH
+Lalu login SSH: admin / wifi@cmcc
+Catatan: setelah terkoneksi internet, login SSH bisa diblokir (faktor cloud CMCC).
+Cara 2 (versi < Juni 2023): System > System Upgrade > ketuk Device Model 5x lalu
+Current Version 5x untuk buka mode developer (SSH + port 8088).
 
 ## Jaringan U-Boot TFTP (dipakai saat dump)
 ipaddr=192.168.1.1  serverip=192.168.1.8 (diset manual via setenv, TIDAK di saveenv)
